@@ -1,6 +1,7 @@
 ﻿import { Icon } from '@/components/ui/icon';
 import type { AppState } from '@/features/app/use-app-state';
 import type { GoalPeriod } from '@/types/app';
+import { ActivityTimerButton } from '@/components/ui/activity-timer-button';
 
 const periods: GoalPeriod[] = ['Today', 'This week', 'This month'];
 const formatTime = (minutes: number) => `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
@@ -15,13 +16,19 @@ export function GoalsPage({ app }: { app: AppState }) {
     progressGoal,
     removeGoal,
     updateGoalManualProgress,
+    toggleGoalTimer,
     projectProgress,
     openProjectForm,
     editProject,
     removeProject,
     updateProjectManualProgress,
+    toggleProjectTimer,
   } = app;
   const visibleGoals = goalProgress.filter((goal) => goal.period === goalPeriod);
+  const activeGoalTimer = goalProgress.find(goal => goal.timerStartedAt);
+  const activeProjectTimer = projectProgress.find(project => project.timerStartedAt);
+  const activeTimerName = activeGoalTimer?.title ?? activeProjectTimer?.title;
+  const anyTimerRunning = Boolean(activeTimerName);
 
   return (
     <>
@@ -48,7 +55,7 @@ export function GoalsPage({ app }: { app: AppState }) {
             <div className="section-kicker">LEARNING & PERSONAL GOALS</div>
             <h2>{visibleGoals.length} goals</h2>
           </div>
-          <span className="roster-note">Planner sessions update progress automatically</span>
+          <span className="roster-note">{activeTimerName ? `Timer running: ${activeTimerName}` : 'Planner and timer sessions update progress automatically'}</span>
         </div>
         <div className="goal-period-tabs">
           {periods.map((period) => (
@@ -61,6 +68,7 @@ export function GoalsPage({ app }: { app: AppState }) {
             </button>
           ))}
         </div>
+        {activeGoalTimer && !visibleGoals.includes(activeGoalTimer) && <div className="active-timer-banner"><span>Timer still running for <b>{activeGoalTimer.title}</b></span><ActivityTimerButton startedAt={activeGoalTimer.timerStartedAt} onToggle={() => toggleGoalTimer(activeGoalTimer)}/></div>}
         <div className="goal-list full-goal-list">
           {visibleGoals.map((goal) => (
             <article className="goal-item expanded-goal-item" key={goal.id ?? goal.title}>
@@ -121,6 +129,7 @@ export function GoalsPage({ app }: { app: AppState }) {
                   />
                 </label>
               </div>
+              <ActivityTimerButton startedAt={goal.timerStartedAt} disabled={anyTimerRunning && !goal.timerStartedAt} onToggle={() => toggleGoalTimer(goal)}/>
               {!goal.dailyTargetMinutes && (
                 <button
                   className={`goal-check ${goal.done >= goal.total ? 'complete' : ''}`}
@@ -240,6 +249,7 @@ export function GoalsPage({ app }: { app: AppState }) {
                     }
                   />
                 </label>
+                <ActivityTimerButton startedAt={project.timerStartedAt} disabled={anyTimerRunning && !project.timerStartedAt} onToggle={() => toggleProjectTimer(project)}/>
                 <button className="student-edit-button" onClick={() => editProject(project)}>
                   Edit project
                 </button>
@@ -249,8 +259,7 @@ export function GoalsPage({ app }: { app: AppState }) {
         </div>
         {projectProgress.length === 0 && (
           <div className="empty-transactions">
-            Add a project such as Identera or My Drive, then link planner sessions to track its
-            time.
+            Add a project and use its timer or link planner sessions to track time.
           </div>
         )}
       </section>

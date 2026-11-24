@@ -24,6 +24,8 @@ export interface Goal {
   dailyTargetMinutes?: number;
   durationDays?: number;
   startDate?: string;
+  /** ISO timestamp while a goal timer is running. */
+  timerStartedAt?: string;
 }
 
 export interface Project {
@@ -35,6 +37,8 @@ export interface Project {
   dailyTargetMinutes: number;
   manualMinutes: number;
   createdAt: string;
+  /** ISO timestamp while a project timer is running. */
+  timerStartedAt?: string;
 }
 
 export interface Student {

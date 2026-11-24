@@ -287,6 +287,30 @@ export function useAppState() {
     setGoals(current => current.map(item => item.id === goal.id ? { ...item, done: safeMinutes, mins: safeMinutes } : item));
   }
 
+  function toggleGoalTimer(goal: Goal) {
+    const matchesGoal = (item: Goal) => goal.id ? item.id === goal.id : item.title === goal.title;
+    if (!goal.timerStartedAt) {
+      const anotherTimerIsRunning = goals.some(item => !matchesGoal(item) && item.timerStartedAt) || projects.some(item => item.timerStartedAt);
+      if (anotherTimerIsRunning) {
+        flash("Stop the active timer before starting another one");
+        return;
+      }
+      const startedAt = new Date().toISOString();
+      setGoals(current => current.map(item => matchesGoal(item) ? { ...item, timerStartedAt: startedAt } : item));
+      flash(`Timer started for ${goal.title}`);
+      return;
+    }
+
+    const timedSession = createTimedSession(goal.timerStartedAt, `${goal.title} session`, { goalId: goal.id });
+    setGoals(current => current.map(item => matchesGoal(item) ? { ...item, timerStartedAt: undefined } : item));
+    if (!timedSession) {
+      flash("Timer cleared; no time was added because its start time was invalid");
+      return;
+    }
+    setPlannerEvents(current => [...current, timedSession.event]);
+    flash(`${timedSession.minutes} minutes added to ${goal.title}`);
+  }
+
   function saveProject(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!projectTitle.trim()) return;
@@ -322,6 +346,29 @@ export function useAppState() {
 
   function updateProjectManualProgress(projectId: string, minutes: number) {
     setProjects(current => current.map(project => project.id === projectId ? { ...project, manualMinutes: Math.max(0, Math.round(minutes || 0)) } : project));
+  }
+
+  function toggleProjectTimer(project: Project) {
+    if (!project.timerStartedAt) {
+      const anotherTimerIsRunning = goals.some(item => item.timerStartedAt) || projects.some(item => item.id !== project.id && item.timerStartedAt);
+      if (anotherTimerIsRunning) {
+        flash("Stop the active timer before starting another one");
+        return;
+      }
+      const startedAt = new Date().toISOString();
+      setProjects(current => current.map(item => item.id === project.id ? { ...item, timerStartedAt: startedAt } : item));
+      flash(`Timer started for ${project.title}`);
+      return;
+    }
+
+    const timedSession = createTimedSession(project.timerStartedAt, `${project.title} session`, { projectId: project.id });
+    setProjects(current => current.map(item => item.id === project.id ? { ...item, timerStartedAt: undefined } : item));
+    if (!timedSession) {
+      flash("Timer cleared; no time was added because its start time was invalid");
+      return;
+    }
+    setPlannerEvents(current => [...current, timedSession.event]);
+    flash(`${timedSession.minutes} minutes added to ${project.title}`);
   }
 
   function removeProject(projectId: string) {
@@ -606,10 +653,10 @@ export function useAppState() {
     studentAddress, setStudentAddress, studentCycleCount, setStudentCycleCount, studentWeeklyClasses, setStudentWeeklyClasses,
     editingStudentId, resetStudentForm, openStudentForm, editStudent, addStudentClassTime, removeStudentClassTime,
     showGoalForm, setShowGoalForm, resetGoalForm, openGoalForm, editGoal, goalName, setGoalName,
-    goalDailyHours, setGoalDailyHours, goalDurationDays, setGoalDurationDays, editingGoalId, updateGoalManualProgress,
+    goalDailyHours, setGoalDailyHours, goalDurationDays, setGoalDurationDays, editingGoalId, updateGoalManualProgress, toggleGoalTimer,
     showProjectForm, setShowProjectForm, resetProjectForm, openProjectForm, editProject, saveProject,
     projectTitle, setProjectTitle, projectDescription, setProjectDescription, projectTechStack, setProjectTechStack,
-    projectTargetHours, setProjectTargetHours, projectDailyHours, setProjectDailyHours, editingProjectId, updateProjectManualProgress, removeProject,
+    projectTargetHours, setProjectTargetHours, projectDailyHours, setProjectDailyHours, editingProjectId, updateProjectManualProgress, toggleProjectTimer, removeProject,
     showTransactionForm, setShowTransactionForm, transactionType, setTransactionType, transactionTitle, setTransactionTitle,
     transactionCategory, setTransactionCategory, transactionAmount, setTransactionAmount, transactionDate, setTransactionDate, editingTransactionId,
     emis, setEmis, openTransactionForm, addEmi,
@@ -621,6 +668,28 @@ export function useAppState() {
     filteredStudents, incomeTotal, expenseTotal, savingsTotal, visibleTransactions, expectedClassIncome, receivedClassIncome,
     flash, addStudent, addGoal, addTransaction, addPlannerEvent, openSleepForm, saveSleepRecord, toggleSleepTimer, clockLabel,
     toggleStudentPaid, setStudentClassCount, removeStudent, removeGoal, removeTransaction, removePlannerEvent, updateEventStatus, rescheduleLesson, progressGoal,
+  };
+}
+
+function createTimedSession(startedAtValue: string, title: string, links: Pick<PlannerEvent, "goalId" | "projectId">) {
+  const startedAt = new Date(startedAtValue);
+  const elapsedMilliseconds = Date.now() - startedAt.getTime();
+  if (Number.isNaN(startedAt.getTime()) || elapsedMilliseconds <= 0) return null;
+  const minutes = Math.max(1, Math.round(elapsedMilliseconds / 60000));
+  return {
+    minutes,
+    event: {
+      id: createId(),
+      title,
+      date: toDateKey(startedAt),
+      day: (startedAt.getDay() + 6) % 7,
+      start: startedAt.getHours() + startedAt.getMinutes() / 60,
+      duration: minutes / 60,
+      details: "Tracked with timer",
+      ...links,
+      status: "completed" as const,
+      kind: "focus" as const,
+    } satisfies PlannerEvent,
   };
 }
 
