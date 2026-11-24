@@ -439,6 +439,25 @@ export function useAppState() {
     setShowSleepForm(false); flash("Last night’s rest is updated");
   }
 
+  function toggleSleepTimer() {
+    const now = new Date();
+    if (sleepRecord.startedAt) {
+      const startedAt = new Date(sleepRecord.startedAt);
+      if (Number.isNaN(startedAt.getTime())) {
+        setSleepRecord({ bed: sleepRecord.bed, wake: "", minutes: 0 });
+        flash("The saved sleep timer was invalid and has been cleared");
+        return;
+      }
+      const minutes = Math.max(0, Math.floor((now.getTime() - startedAt.getTime()) / 60000));
+      setSleepRecord({ bed: formatLocalTime(startedAt), wake: formatLocalTime(now), minutes });
+      flash(`Sleep recorded: ${Math.floor(minutes / 60)}h ${minutes % 60}m`);
+      return;
+    }
+
+    setSleepRecord({ bed: formatLocalTime(now), wake: "", minutes: 0, startedAt: now.toISOString() });
+    flash("Sleep timer started");
+  }
+
   function clockLabel(time: string) {
     const [hour, minute] = time.split(":").map(Number);
     return `${hour % 12 || 12}:${String(minute).padStart(2, "0")} ${hour >= 12 ? "PM" : "AM"}`;
@@ -600,9 +619,13 @@ export function useAppState() {
     showSleepForm, setShowSleepForm, sleepBedInput, setSleepBedInput, sleepWakeInput, setSleepWakeInput,
     today, todayDayIndex, dateLabel, dateNumbers, weekDates, weekRangeLabel, monthDates, monthLabel, remainingHours,
     filteredStudents, incomeTotal, expenseTotal, savingsTotal, visibleTransactions, expectedClassIncome, receivedClassIncome,
-    flash, addStudent, addGoal, addTransaction, addPlannerEvent, openSleepForm, saveSleepRecord, clockLabel,
+    flash, addStudent, addGoal, addTransaction, addPlannerEvent, openSleepForm, saveSleepRecord, toggleSleepTimer, clockLabel,
     toggleStudentPaid, setStudentClassCount, removeStudent, removeGoal, removeTransaction, removePlannerEvent, updateEventStatus, rescheduleLesson, progressGoal,
   };
+}
+
+function formatLocalTime(date: Date) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 function isDateInGoalPeriod(dateKey: string | undefined, period: GoalPeriod, today: Date) {

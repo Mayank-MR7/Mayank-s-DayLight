@@ -23,7 +23,8 @@ export function normalizeTransactions(value: unknown): Transaction[] {
 export function normalizeSleepRecord(value: unknown): SleepRecord {
   if (typeof value !== "object" || value === null) return initialSleepRecord;
   const record = value as Partial<SleepRecord>;
-  if (record.bed === "22:48" && record.wake === "06:30" && record.minutes === 462) return initialSleepRecord;
+  if (record.bed === "22:48" && record.wake === "06:30" && record.minutes === 462 && !record.startedAt) return initialSleepRecord;
   if (typeof record.bed !== "string" || typeof record.wake !== "string" || typeof record.minutes !== "number") return initialSleepRecord;
-  return { bed: record.bed, wake: record.wake, minutes: Math.max(0, Math.floor(record.minutes)) };
+  const startedAt = typeof record.startedAt === "string" && !Number.isNaN(Date.parse(record.startedAt)) ? record.startedAt : undefined;
+  return { bed: record.bed, wake: record.wake, minutes: Math.max(0, Math.floor(record.minutes)), startedAt };
 }

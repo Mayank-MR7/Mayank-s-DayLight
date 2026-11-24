@@ -107,4 +107,6 @@ export interface SleepRecord {
   bed: string;
   wake: string;
   minutes: number;
+  /** ISO timestamp while the sleep timer is running. */
+  startedAt?: string;
 }
