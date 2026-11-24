@@ -14,7 +14,7 @@ export function AppModals({ app }: { app: AppState }) {
     transactionCategory, setTransactionCategory, transactionAmount, setTransactionAmount, transactionDate, setTransactionDate, editingTransactionId,
     showEventForm, setShowEventForm, addPlannerEvent, eventTitle, setEventTitle, eventDate, setEventDate,
     eventStartTime, setEventStartTime, eventEndTime, setEventEndTime, eventDetails, setEventDetails,
-    eventStudentId, setEventStudentId, eventGoalId, setEventGoalId, eventProjectId, setEventProjectId, eventError, setEventError, eventKind, setEventKind, students, goals, projects,
+    eventStudentIds, setEventStudentIds, eventRepeatsWeekly, setEventRepeatsWeekly, eventGoalId, setEventGoalId, eventProjectId, setEventProjectId, eventError, setEventError, eventKind, setEventKind, students, goals, projects,
     showSleepForm, setShowSleepForm, saveSleepRecord, sleepBedInput, setSleepBedInput, sleepWakeInput, setSleepWakeInput,
   } = app;
 
@@ -89,7 +89,7 @@ export function AppModals({ app }: { app: AppState }) {
           <button type="button" className="modal-close" onClick={() => setShowEventForm(false)}><Icon name="close"/></button>
           <div className="modal-icon goal"><Icon name="calendar" size={20}/></div><div className="section-kicker">MAKE SPACE FOR IT</div><h2>Add a planner event</h2><p>Lessons, appointments, or time set aside for yourself.</p>
           <label>Event name<input autoFocus required value={eventTitle} onChange={event => setEventTitle(event.target.value)} placeholder="e.g. Piano lesson"/></label>
-          <label>Date<input type="date" required value={eventDate} onChange={event => setEventDate(event.target.value)}/></label>
+          <label>{eventRepeatsWeekly ? "First occurrence date (sets weekday)" : "Date"}<input type="date" required value={eventDate} onChange={event => setEventDate(event.target.value)}/></label>
           <div className="modal-inline-fields">
             <label>From<TimePicker ariaLabel="Event start time" value={eventStartTime} onChange={value => { setEventStartTime(value); setEventError(""); }}/></label>
             <label>To<TimePicker ariaLabel="Event end time" value={eventEndTime} onChange={value => { setEventEndTime(value); setEventError(""); }}/></label>
@@ -97,7 +97,11 @@ export function AppModals({ app }: { app: AppState }) {
           {eventError && <p className="form-error" role="alert">{eventError}</p>}
           <label>Details <span className="optional-label">Optional</span><textarea rows={3} value={eventDetails} onChange={event => setEventDetails(event.target.value)} placeholder="Add a location, preparation note, or anything else to remember"/></label>
           <label>Type<select value={eventKind} onChange={event => { setEventKind(event.target.value as typeof eventKind); setEventError(""); }}><option value="personal">Personal</option><option value="focus">Study</option><option value="lesson">Music lesson</option><option value="music">Practice</option></select></label>
-          {eventKind === "lesson" && <label>Student<select required value={eventStudentId} onChange={event => setEventStudentId(event.target.value)}>{students.length === 0 && <option value="">Add a student first</option>}{students.map(student => <option key={student.id ?? student.name} value={student.id ?? student.name}>{student.name} · {student.instrument}</option>)}</select>{students.length === 0 && <small className="field-hint">Add a student in Your Studio before scheduling a class.</small>}</label>}
+          {eventKind === "lesson" && <fieldset className="lesson-student-picker"><legend>Students <span className="optional-label">Choose one for private or several for a group</span></legend>
+            {students.map(student => { const id = student.id ?? student.name; return <label className="lesson-student-option" key={id}><input type="checkbox" checked={eventStudentIds.includes(id)} onChange={change => { setEventStudentIds(current => change.target.checked ? [...current, id] : current.filter(item => item !== id)); setEventError(""); }}/><span><b>{student.name}</b><small>{student.instrument}</small></span></label>; })}
+            {students.length === 0 && <small className="field-hint">Add a student in Your Studio before scheduling a class.</small>}
+          </fieldset>}
+          {eventKind === "lesson" && <label className="event-repeat-option"><input type="checkbox" checked={eventRepeatsWeekly} onChange={event => setEventRepeatsWeekly(event.target.checked)}/><span><b>Repeat this lesson every week</b><small>For a group class, select all attendees above. Attendance can be marked separately for each student.</small></span></label>}
           {(eventKind === "focus" || eventKind === "music") && <label>Goal to update<select value={eventGoalId} onChange={event => setEventGoalId(event.target.value)}><option value="">No linked goal</option>{goals.map(goal => <option key={goal.id ?? goal.title} value={goal.id ?? ""}>{goal.title} · {goal.period}</option>)}</select><small className="field-hint">Completing this session adds its scheduled minutes to the linked goal.</small></label>}
           {(eventKind === "focus" || eventKind === "music") && <label>Project to update<select value={eventProjectId} onChange={event => setEventProjectId(event.target.value)}><option value="">No linked project</option>{projects.map(project => <option key={project.id} value={project.id}>{project.title}</option>)}</select><small className="field-hint">Completed session time adds to the project progress.</small></label>}
           <button className="primary-button modal-submit" type="submit">Add to planner <Icon name="arrow" size={15}/></button>

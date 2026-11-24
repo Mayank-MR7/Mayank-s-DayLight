@@ -7,13 +7,24 @@ export function toDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-/** Mix exact-date sessions with legacy weekly repeats, suppressing a repeat when it has a dated instance. */
+/** Expand weekly templates for a date and merge that date's saved attendance or exception. */
 export function getEventsForDate(events: PlannerEvent[], date: Date): PlannerEvent[] {
   const dateKey = toDateKey(date);
   const weekday = (date.getDay() + 6) % 7;
   const datedEvents = events.filter(event => event.date === dateKey);
-  const completedRepeats = new Set(datedEvents.map(event => event.templateId).filter((id): id is string => Boolean(id)));
-  const recurringEvents = events.filter(event => !event.date && event.day === weekday && (!event.id || !completedRepeats.has(event.id)));
+  const recurringEvents = events.filter(event => !event.date && event.day === weekday).map(event => {
+    const override = datedEvents.find(item => item.templateId === event.id);
+    return {
+      ...event,
+      ...override,
+      id: event.id,
+      date: dateKey,
+      templateId: event.id,
+      status: override?.status ?? event.status ?? "scheduled",
+      studentStatuses: override?.studentStatuses,
+    };
+  });
+  const oneOffEvents = datedEvents.filter(event => !event.templateId);
 
-  return [...recurringEvents, ...datedEvents].sort((a, b) => a.start - b.start);
+  return [...recurringEvents, ...oneOffEvents].sort((a, b) => a.start - b.start);
 }

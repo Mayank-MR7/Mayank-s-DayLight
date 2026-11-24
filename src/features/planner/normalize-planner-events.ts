@@ -2,7 +2,7 @@ import { initialPlannerEvents, initialStudents } from "@/data/initial-data";
 import type { EventKind, LessonStatus, PlannerEvent } from "@/types/app";
 
 const eventKinds: EventKind[] = ["personal", "focus", "lesson", "music"];
-const lessonStatuses: LessonStatus[] = ["scheduled", "completed", "incomplete"];
+const lessonStatuses: LessonStatus[] = ["scheduled", "completed", "incomplete", "cancelled", "rescheduled"];
 
 export function normalizePlannerEvents(value: unknown): PlannerEvent[] {
   if (!Array.isArray(value)) return initialPlannerEvents;
@@ -38,6 +38,10 @@ export function normalizePlannerEvents(value: unknown): PlannerEvent[] {
       duration: candidate.duration,
       details: candidate.details,
       studentId: candidate.studentId ?? associatedStudent?.id,
+      studentIds: Array.isArray(candidate.studentIds) ? candidate.studentIds.filter((id): id is string => typeof id === "string") : undefined,
+      studentStatuses: candidate.studentStatuses && typeof candidate.studentStatuses === "object"
+        ? Object.fromEntries(Object.entries(candidate.studentStatuses).filter((entry): entry is [string, LessonStatus] => lessonStatuses.includes(entry[1] as LessonStatus)))
+        : undefined,
       goalId: candidate.goalId,
       projectId: candidate.projectId,
       studentSchedule: Boolean(candidate.studentSchedule),

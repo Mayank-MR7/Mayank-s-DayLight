@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { weekdays } from "@/data/initial-data";
 import type { AppState } from "@/features/app/use-app-state";
@@ -12,10 +13,13 @@ function getEventEnd(event: PlannerEvent) {
 }
 
 export function PlannerPage({ app }: { app: AppState }) {
+  const [rescheduleTarget, setRescheduleTarget] = useState<{ event: PlannerEvent; date: Date; studentId?: string } | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState("");
+  const [rescheduleTime, setRescheduleTime] = useState("10:00");
   const {
     plannerView, setPlannerView, selectedPlannerDate, setSelectedPlannerDate,
     plannerWeekDates, plannerWeekLabel, plannerMonthDates, plannerMonthLabel, plannerEvents, students,
-    removePlannerEvent, updateEventStatus, openEventForm, today,
+    removePlannerEvent, updateEventStatus, rescheduleLesson, openEventForm, today,
   } = app;
 
   const dayEvents = getEventsForDate(plannerEvents, selectedPlannerDate);
@@ -38,6 +42,20 @@ export function PlannerPage({ app }: { app: AppState }) {
 
   function goToToday() {
     setSelectedPlannerDate(today);
+  }
+
+  function openReschedule(event: PlannerEvent, date: Date, studentId?: string) {
+    setRescheduleTarget({ event, date, studentId });
+    setRescheduleDate(event.date ?? toLocalDateKey(date));
+    setRescheduleTime(`${String(Math.floor(event.start)).padStart(2, "0")}:${String(Math.round((event.start % 1) * 60)).padStart(2, "0")}`);
+  }
+
+  function saveReschedule(formEvent: React.FormEvent<HTMLFormElement>) {
+    formEvent.preventDefault();
+    if (!rescheduleTarget) return;
+    const [hour, minute] = rescheduleTime.split(":").map(Number);
+    rescheduleLesson(rescheduleTarget.event, rescheduleTarget.date, rescheduleDate, hour + minute / 60, rescheduleTarget.studentId);
+    setRescheduleTarget(null);
   }
 
   return (
@@ -66,7 +84,7 @@ export function PlannerPage({ app }: { app: AppState }) {
           </div>
         </div>
 
-        {plannerView === "Day" && <DayTimeline events={dayEvents} students={students} onRemove={removePlannerEvent} onStatusChange={updateEventStatus}/>} 
+        {plannerView === "Day" && <DayTimeline events={dayEvents} students={students} onRemove={removePlannerEvent} onStatusChange={updateEventStatus} onReschedule={openReschedule} onAddAtSlot={(event, date) => openEventForm(date, event)} date={selectedPlannerDate}/>}
 
         {plannerView === "Week" && (
           <div className="planner-agenda">
@@ -78,8 +96,9 @@ export function PlannerPage({ app }: { app: AppState }) {
                   </button>
                   <span className={`legend-dot ${event.kind === "lesson" ? "lesson-dot" : event.kind === "focus" ? "focus-dot" : "personal-dot"}`}/>
                   <div className="agenda-title"><b>{getDisplayTitle(event, students)}</b><small>{formatClock(event.start)} – {getEventEnd(event)}{event.details ? ` · ${event.details}` : ""}</small></div>
-                  <TaskStatusSelect value={event.status ?? "scheduled"} onChange={status => updateEventStatus(event, status, date)}/>
-                  {!event.studentSchedule && <button className="row-action danger-action" onClick={() => removePlannerEvent(event)} aria-label={`Remove ${event.title}`}><Icon name="close" size={15}/></button>}
+                  <EventAttendance event={event} students={students} onStatusChange={(status, studentId) => updateEventStatus(event, status, date, studentId)} onReschedule={studentId => openReschedule(event, date, studentId)} onAddAtSlot={() => openEventForm(date, event)}/>
+                  {event.kind === "lesson" && !event.studentIds?.length && <button className="event-reschedule-button" onClick={() => openReschedule(event, date)}>Move</button>}
+                  {canRemovePlannerEvent(event) && <button className="row-action danger-action" onClick={() => removePlannerEvent(event)} aria-label={event.studentSchedule && event.templateId ? `Remove weekly group schedule ${event.title}` : `Remove ${event.title}`}><Icon name="close" size={15}/></button>}
                 </article>
               );
             })}
@@ -108,11 +127,22 @@ export function PlannerPage({ app }: { app: AppState }) {
           </div>
         )}
       </section>
+
+      {rescheduleTarget && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setRescheduleTarget(null); }}>
+        <form className="modal-card reschedule-modal-card" onSubmit={saveReschedule}>
+          <button type="button" className="modal-close" onClick={() => setRescheduleTarget(null)} aria-label="Close reschedule dialog"><Icon name="close"/></button>
+          <div className="section-kicker">KEEP THE WEEKLY ROUTINE</div><h2>Reschedule this class</h2>
+          <p>This moves only this occurrence. The usual weekly class stays on the planner.</p>
+          <label>New date<input type="date" required value={rescheduleDate} onChange={event => setRescheduleDate(event.target.value)}/></label>
+          <label>New start time<input type="time" required value={rescheduleTime} onChange={event => setRescheduleTime(event.target.value)}/></label>
+          <button className="primary-button modal-submit" type="submit">Save new class time <Icon name="arrow" size={15}/></button>
+        </form>
+      </div>}
     </>
   );
 }
 
-function DayTimeline({ events, students, onRemove, onStatusChange }: { events: PlannerEvent[]; students: Student[]; onRemove: (event: PlannerEvent) => void; onStatusChange: (event: PlannerEvent, status: LessonStatus, date?: Date) => void }) {
+function DayTimeline({ events, students, onRemove, onStatusChange, onReschedule, onAddAtSlot, date }: { events: PlannerEvent[]; students: Student[]; onRemove: (event: PlannerEvent) => void; onStatusChange: (event: PlannerEvent, status: LessonStatus, date?: Date, studentId?: string) => void; onReschedule: (event: PlannerEvent, date: Date, studentId?: string) => void; onAddAtSlot: (event: PlannerEvent, date: Date) => void; date: Date }) {
   return (
     <div className="day-timeline" aria-label="Daily schedule from midnight to midnight">
       <div className="day-hour-labels">
@@ -133,8 +163,9 @@ function DayTimeline({ events, students, onRemove, onStatusChange }: { events: P
               <span>{formatClock(event.start)} – {getEventEnd(event)}</span>
               {event.details && <small>{event.details}</small>}
             </div>
-            <TaskStatusSelect value={event.status ?? "scheduled"} onChange={status => onStatusChange(event, status)}/>
-            {!event.studentSchedule && <button className="row-action danger-action" onClick={() => onRemove(event)} aria-label={`Remove ${event.title}`}><Icon name="close" size={14}/></button>}
+            <EventAttendance event={event} students={students} onStatusChange={(status, studentId) => onStatusChange(event, status, date, studentId)} onReschedule={studentId => onReschedule(event, date, studentId)} onAddAtSlot={() => onAddAtSlot(event, date)}/>
+            {event.kind === "lesson" && !event.studentIds?.length && <button className="event-reschedule-button" onClick={() => onReschedule(event, date)}>Move</button>}
+            {canRemovePlannerEvent(event) && <button className="row-action danger-action" onClick={() => onRemove(event)} aria-label={event.studentSchedule && event.templateId ? `Remove weekly group schedule ${event.title}` : `Remove ${event.title}`}><Icon name="close" size={14}/></button>}
           </article>
         ))}
         {events.length === 0 && <div className="day-empty-state">No events on this day. Leave it open or add a plan.</div>}
@@ -144,16 +175,44 @@ function DayTimeline({ events, students, onRemove, onStatusChange }: { events: P
 }
 
 function getDisplayTitle(event: PlannerEvent, students: Student[]) {
+  if (event.studentIds?.length) {
+    const names = event.studentIds.map(id => students.find(item => (item.id ?? item.name) === id)?.name).filter(Boolean);
+    return `${names.join(", ")} · ${event.title}`;
+  }
   const student = students.find(item => (item.id ?? item.name) === event.studentId);
   return student ? `${student.name} · ${event.title}` : event.title;
 }
 
-function TaskStatusSelect({ value, onChange }: { value: LessonStatus; onChange: (status: LessonStatus) => void }) {
+function canRemovePlannerEvent(event: PlannerEvent) {
+  return !event.studentSchedule || Boolean(event.date && !event.templateId) || Boolean(event.studentIds?.length && event.templateId);
+}
+
+function EventAttendance({ event, students, onStatusChange, onReschedule, onAddAtSlot }: { event: PlannerEvent; students: Student[]; onStatusChange: (status: LessonStatus, studentId?: string) => void; onReschedule: (studentId?: string) => void; onAddAtSlot: () => void }) {
+  if (event.studentIds?.length) return <div className="group-attendance-list">{event.studentIds.map(studentId => {
+    const student = students.find(item => (item.id ?? item.name) === studentId);
+    const status = event.studentStatuses?.[studentId] ?? "scheduled";
+    return <div className="group-attendance-row" key={studentId}>
+      <span>{student?.name ?? "Student"}</span>
+      <TaskStatusSelect value={status} onChange={next => onStatusChange(next, studentId)} includeClassStatuses/>
+      <button type="button" className="event-reschedule-button" onClick={() => onReschedule(studentId)}>Move</button>
+      {(status === "cancelled" || status === "incomplete") && <button type="button" className="event-reschedule-button" onClick={onAddAtSlot}>Fill slot</button>}
+    </div>;
+  })}</div>;
+  return <><TaskStatusSelect value={event.status ?? "scheduled"} onChange={onStatusChange} includeClassStatuses={event.kind === "lesson"}/>{event.kind === "lesson" && (event.status === "cancelled" || event.status === "incomplete") && <button type="button" className="event-reschedule-button" onClick={onAddAtSlot}>Fill slot</button>}</>;
+}
+
+function TaskStatusSelect({ value, onChange, includeClassStatuses = false }: { value: LessonStatus; onChange: (status: LessonStatus) => void; includeClassStatuses?: boolean }) {
   return (
     <select className={`lesson-status-select ${value}`} value={value} onChange={event => onChange(event.target.value as LessonStatus)} aria-label="Task completion status">
       <option value="scheduled">Scheduled</option>
       <option value="completed">Complete</option>
       <option value="incomplete">Incomplete</option>
+      {includeClassStatuses && <option value="cancelled">Cancelled</option>}
+      {includeClassStatuses && <option value="rescheduled" disabled>Rescheduled - use Move</option>}
     </select>
   );
+}
+
+function toLocalDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }

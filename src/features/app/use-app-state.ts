@@ -67,7 +67,8 @@ export function useAppState() {
   const [eventStartTime, setEventStartTime] = useState("10:00");
   const [eventEndTime, setEventEndTime] = useState("11:00");
   const [eventDetails, setEventDetails] = useState("");
-  const [eventStudentId, setEventStudentId] = useState("");
+  const [eventStudentIds, setEventStudentIds] = useState<string[]>([]);
+  const [eventRepeatsWeekly, setEventRepeatsWeekly] = useState(false);
   const [eventGoalId, setEventGoalId] = useState("");
   const [eventProjectId, setEventProjectId] = useState("");
   const [eventError, setEventError] = useState("");
@@ -367,33 +368,54 @@ export function useAppState() {
       setEventError("End time needs to be later than start time. Events can’t cross midnight yet.");
       return;
     }
-    const selectedStudent = students.find(student => (student.id ?? student.name) === eventStudentId);
-    if (eventKind === "lesson" && !selectedStudent) {
-      setEventError("Add a music student before scheduling a lesson.");
+    const selectedStudents = students.filter(student => eventStudentIds.includes(student.id ?? student.name));
+    if (eventKind === "lesson" && selectedStudents.length === 0) {
+      setEventError("Choose at least one student before scheduling a lesson.");
       return;
     }
     const date = new Date(`${eventDate}T12:00:00`);
+    const weekday = (date.getDay() + 6) % 7;
+    if (eventKind === "lesson" && eventRepeatsWeekly && selectedStudents.some(student => student.weeklyClasses.some(item => item.day === weekday && item.start === startMinutes / 60))) {
+      setEventError("At least one selected student already has a private class at that weekly time. Choose another time.");
+      return;
+    }
+    const studentIds = selectedStudents.map(student => student.id ?? student.name);
     setPlannerEvents(current => [...current, {
-      id: createId(), title: eventTitle.trim(), date: eventDate, day: (date.getDay() + 6) % 7, start: startMinutes / 60,
+      id: createId(), title: eventTitle.trim(), date: eventRepeatsWeekly && eventKind === "lesson" ? undefined : eventDate, day: (date.getDay() + 6) % 7, start: startMinutes / 60,
       duration: (endMinutes - startMinutes) / 60, details: eventDetails.trim() || undefined,
-      studentId: eventKind === "lesson" ? (selectedStudent?.id ?? selectedStudent?.name) : undefined,
+      studentId: eventKind === "lesson" && studentIds.length === 1 ? studentIds[0] : undefined,
+      studentIds: eventKind === "lesson" ? studentIds : undefined,
+      studentStatuses: eventKind === "lesson" && studentIds.length > 0
+        ? Object.fromEntries(studentIds.map(studentId => [studentId, "scheduled" as const]))
+        : undefined,
       goalId: eventKind === "focus" || eventKind === "music" ? eventGoalId || undefined : undefined,
       projectId: eventKind === "focus" || eventKind === "music" ? eventProjectId || undefined : undefined,
       status: "scheduled",
+      studentSchedule: eventKind === "lesson",
       kind: eventKind,
     }]);
     setEventTitle(""); setEventDetails(""); setEventError(""); setShowEventForm(false);
-    flash(eventKind === "lesson" ? `Lesson scheduled for ${selectedStudent?.name}` : "Added to your planner");
+    setEventStudentIds([]); setEventRepeatsWeekly(false);
+    flash(eventKind === "lesson" ? `Lesson scheduled for ${selectedStudents.map(student => student.name).join(", ")}` : "Added to your planner");
   }
 
-  function openEventForm(date = selectedPlannerDate) {
+  function openEventForm(date = selectedPlannerDate, replacementSlot?: PlannerEvent) {
     setEventDate(toDateKey(date));
+    setEventRepeatsWeekly(false);
+    if (replacementSlot?.kind === "lesson") {
+      setEventKind("lesson");
+      setEventTitle(replacementSlot.title);
+      setEventDetails("");
+      const startMinute = Math.round(replacementSlot.start * 60);
+      const endMinute = Math.round((replacementSlot.start + replacementSlot.duration) * 60);
+      setEventStartTime(`${String(Math.floor(startMinute / 60)).padStart(2, "0")}:${String(startMinute % 60).padStart(2, "0")}`);
+      setEventEndTime(`${String(Math.floor(endMinute / 60)).padStart(2, "0")}:${String(endMinute % 60).padStart(2, "0")}`);
+      setEventStudentIds([]);
+    }
     if (!goals.some(goal => goal.id === eventGoalId)) setEventGoalId(goals[0]?.id ?? "");
     if (!projects.some(project => project.id === eventProjectId)) setEventProjectId("");
-    if (!students.some(student => (student.id ?? student.name) === eventStudentId)) {
-      const firstStudent = students[0];
-      setEventStudentId(firstStudent ? firstStudent.id ?? firstStudent.name : "");
-    }
+    const firstStudent = students[0];
+    setEventStudentIds(replacementSlot ? [] : firstStudent ? [firstStudent.id ?? firstStudent.name] : []);
     setEventError("");
     setShowEventForm(true);
   }
@@ -446,8 +468,17 @@ export function useAppState() {
   }
 
   function removeStudent(student: Student) {
+    const studentId = student.id ?? student.name;
     setStudents(current => current.filter(item => student.id ? item.id !== student.id : item.name !== student.name));
-    setPlannerEvents(current => current.filter(event => event.studentId !== (student.id ?? student.name)));
+    setPlannerEvents(current => current.flatMap(event => {
+      if (event.studentId === studentId) return [];
+      if (!event.studentIds?.includes(studentId)) return [event];
+      const studentIds = event.studentIds.filter(id => id !== studentId);
+      if (studentIds.length === 0) return [];
+      const studentStatuses = { ...event.studentStatuses };
+      delete studentStatuses[studentId];
+      return [{ ...event, studentIds, studentStatuses }];
+    }));
     flash(`${student.name} removed`);
   }
 
@@ -463,15 +494,81 @@ export function useAppState() {
     setPlannerEvents(current => current.filter(item => plannerEvent.id ? item.id !== plannerEvent.id : item.title !== plannerEvent.title || item.day !== plannerEvent.day || item.start !== plannerEvent.start)); flash("Event removed from your planner");
   }
 
-  function updateEventStatus(plannerEvent: PlannerEvent, status: LessonStatus, occurrenceDate = selectedPlannerDate) {
+  function updateEventStatus(plannerEvent: PlannerEvent, status: LessonStatus, occurrenceDate = selectedPlannerDate, studentId?: string) {
     setPlannerEvents(current => {
+      if (plannerEvent.templateId) {
+        const date = plannerEvent.date ?? toDateKey(occurrenceDate);
+        const existing = current.find(item => item.date === date && item.templateId === plannerEvent.templateId);
+        const updated = existing ?? { ...plannerEvent, id: createId(), date, templateId: plannerEvent.templateId };
+        const next = studentId
+          ? { ...updated, status: existing?.status ?? "scheduled" as const, studentStatuses: { ...existing?.studentStatuses, [studentId]: status } }
+          : { ...updated, status };
+        return existing ? current.map(item => item.id === existing.id ? next : item) : [...current, next];
+      }
+      if (studentId && plannerEvent.studentIds?.length) {
+        return current.map(item => item.id === plannerEvent.id
+          ? { ...item, studentStatuses: { ...item.studentStatuses, [studentId]: status } }
+          : item);
+      }
       if (plannerEvent.date) return current.map(item => item.id === plannerEvent.id ? { ...item, status } : item);
       const date = toDateKey(occurrenceDate);
-      const existing = current.find(item => item.date === date && item.templateId === plannerEvent.id);
-      if (existing) return current.map(item => item.id === existing.id ? { ...item, status } : item);
       return [...current, { ...plannerEvent, id: createId(), date, templateId: plannerEvent.id, status }];
     });
-    flash(status === "completed" ? "Task marked complete" : status === "incomplete" ? "Task marked incomplete" : "Task returned to scheduled");
+    const noun = plannerEvent.kind === "lesson" ? "Class" : "Task";
+    flash(status === "completed" ? `${noun} marked complete` : status === "incomplete" ? `${noun} marked incomplete` : status === "cancelled" ? `${noun} marked cancelled` : status === "rescheduled" ? `${noun} occurrence marked rescheduled` : `${noun} returned to scheduled`);
+  }
+
+  function rescheduleLesson(plannerEvent: PlannerEvent, occurrenceDate: Date, newDateKey: string, newStart: number, studentId?: string) {
+    const originalDateKey = toDateKey(occurrenceDate);
+    const targetDate = new Date(`${newDateKey}T12:00:00`);
+    if (Number.isNaN(targetDate.getTime()) || !newDateKey) return;
+    const targetDay = (targetDate.getDay() + 6) % 7;
+    const movingOneStudent = Boolean(studentId && plannerEvent.studentIds?.length);
+    const movedStudents = movingOneStudent ? [studentId!] : plannerEvent.studentIds;
+    const movedStudentId = movingOneStudent ? studentId : plannerEvent.studentId;
+    const movedEvent: PlannerEvent = {
+      ...plannerEvent,
+      id: createId(),
+      date: newDateKey,
+      day: targetDay,
+      start: newStart,
+      status: "scheduled",
+      studentId: movedStudentId,
+      studentIds: movedStudents,
+      studentStatuses: movedStudents?.length ? Object.fromEntries(movedStudents.map(id => [id, "scheduled" as const])) : undefined,
+      templateId: undefined,
+    };
+
+    if (plannerEvent.templateId) {
+      setPlannerEvents(current => {
+        const existing = current.find(item => item.date === originalDateKey && item.templateId === plannerEvent.templateId);
+        const exception = existing ?? { ...plannerEvent, id: createId(), date: originalDateKey, templateId: plannerEvent.templateId };
+        const updatedException = movingOneStudent
+          ? { ...exception, status: exception.status ?? "scheduled" as const, studentStatuses: { ...exception.studentStatuses, [studentId!]: "rescheduled" as const } }
+          : { ...exception, status: "rescheduled" as const };
+        const withException = existing
+          ? current.map(item => item.id === existing.id ? updatedException : item)
+          : [...current, updatedException];
+        return [...withException, movedEvent];
+      });
+    } else if (movingOneStudent) {
+      setPlannerEvents(current => {
+        const original = current.find(item => item.id === plannerEvent.id);
+        if (!original) return current;
+        const remainingStudentIds = original.studentIds?.filter(id => id !== studentId) ?? [];
+        const kept = remainingStudentIds.length
+          ? current.map(item => item.id === original.id
+            ? { ...item, studentIds: remainingStudentIds, studentStatuses: Object.fromEntries(Object.entries(item.studentStatuses ?? {}).filter(([id]) => id !== studentId)) }
+            : item)
+          : current.filter(item => item.id !== original.id);
+        return [...kept, movedEvent];
+      });
+    } else if (plannerEvent.date) {
+      setPlannerEvents(current => current.map(item => item.id === plannerEvent.id ? movedEvent : item));
+    } else {
+      setPlannerEvents(current => [...current, movedEvent]);
+    }
+    flash("Class rescheduled; the weekly routine stays unchanged");
   }
 
   function progressGoal(goal: Goal) {
@@ -498,13 +595,13 @@ export function useAppState() {
     transactionCategory, setTransactionCategory, transactionAmount, setTransactionAmount, transactionDate, setTransactionDate, editingTransactionId,
     emis, setEmis, openTransactionForm, addEmi,
     showEventForm, setShowEventForm, openEventForm, eventTitle, setEventTitle, eventDate, setEventDate,
-    eventStartTime, setEventStartTime, eventEndTime, setEventEndTime, eventDetails, setEventDetails, eventStudentId, setEventStudentId, eventGoalId, setEventGoalId,
-    eventError, setEventError, eventKind, setEventKind, eventProjectId, setEventProjectId,
+    eventStartTime, setEventStartTime, eventEndTime, setEventEndTime, eventDetails, setEventDetails, eventGoalId, setEventGoalId,
+    eventError, setEventError, eventKind, setEventKind, eventStudentIds, setEventStudentIds, eventRepeatsWeekly, setEventRepeatsWeekly, eventProjectId, setEventProjectId,
     showSleepForm, setShowSleepForm, sleepBedInput, setSleepBedInput, sleepWakeInput, setSleepWakeInput,
     today, todayDayIndex, dateLabel, dateNumbers, weekDates, weekRangeLabel, monthDates, monthLabel, remainingHours,
     filteredStudents, incomeTotal, expenseTotal, savingsTotal, visibleTransactions, expectedClassIncome, receivedClassIncome,
     flash, addStudent, addGoal, addTransaction, addPlannerEvent, openSleepForm, saveSleepRecord, clockLabel,
-    toggleStudentPaid, setStudentClassCount, removeStudent, removeGoal, removeTransaction, removePlannerEvent, updateEventStatus, progressGoal,
+    toggleStudentPaid, setStudentClassCount, removeStudent, removeGoal, removeTransaction, removePlannerEvent, updateEventStatus, rescheduleLesson, progressGoal,
   };
 }
 

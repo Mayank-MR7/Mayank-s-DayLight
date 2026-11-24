@@ -15,23 +15,30 @@ function emptyForecast(): StudioIncomeForecast {
 }
 
 export function getStudioIncomeForecast(students: Student[], plannerEvents: PlannerEvent[], dates: Date[]): StudioIncomeForecast {
-  return dates.reduce((forecast, date) => {
-    const sessions = getEventsForDate(plannerEvents, date).filter(event => event.kind === "lesson" && event.studentSchedule);
+  const forecast = dates.reduce((total, date) => {
+    const sessions = getEventsForDate(plannerEvents, date).filter(event => event.kind === "lesson");
     sessions.forEach(session => {
-      const student = students.find(item => (item.id ?? item.name) === session.studentId);
-      if (!student || student.cycleCount <= 0) return;
+      const studentIds = session.studentIds ?? (session.studentId ? [session.studentId] : []);
+      studentIds.forEach(studentId => {
+        const student = students.find(item => (item.id ?? item.name) === studentId);
+        if (!student || student.cycleCount <= 0) return;
+        const status = session.studentStatuses?.[studentId] ?? session.status ?? "scheduled";
+        if (status === "rescheduled") return;
 
-      const classValue = student.fee / student.cycleCount;
-      forecast.scheduledClasses += 1;
-      forecast.scheduledValue += classValue;
-      if (session.status === "completed") forecast.completedClasses += 1;
-      if (session.status === "incomplete") {
-        forecast.missedClasses += 1;
-        forecast.missedValue += classValue;
-      }
+        const classValue = student.fee / student.cycleCount;
+        total.scheduledClasses += 1;
+        total.scheduledValue += classValue;
+        if (status === "completed") total.completedClasses += 1;
+        if (status === "incomplete" || status === "cancelled") {
+          total.missedClasses += 1;
+          total.missedValue += classValue;
+        }
+      });
     });
-    return forecast;
+    return total;
   }, emptyForecast());
+  forecast.projectedValue = forecast.scheduledValue - forecast.missedValue;
+  return forecast;
 }
 
 export function getCurrentWeekDates(referenceDate: Date): Date[] {

@@ -9,7 +9,7 @@ export type FinanceFilter = "All activity" | "Income" | "Expenses" | "Savings";
 export type TransactionType = "income" | "expense" | "saving";
 export type FinancePeriod = "week" | "month";
 export type EventKind = "personal" | "focus" | "lesson" | "music";
-export type LessonStatus = "scheduled" | "completed" | "incomplete";
+export type LessonStatus = "scheduled" | "completed" | "incomplete" | "cancelled" | "rescheduled";
 
 export interface Goal {
   id?: string;
@@ -92,6 +92,10 @@ export interface PlannerEvent {
   title: string;
   details?: string;
   studentId?: string;
+  /** Students attending a shared lesson. Their attendance is tracked individually. */
+  studentIds?: string[];
+  /** Attendance overrides for a dated occurrence of a group lesson. */
+  studentStatuses?: Record<string, LessonStatus>;
   goalId?: string;
   projectId?: string;
   studentSchedule?: boolean;
