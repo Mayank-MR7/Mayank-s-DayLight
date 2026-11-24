@@ -6,6 +6,7 @@ import { usePersistentState } from "@/hooks/use-persistent-state";
 import { normalizePlannerEvents } from "@/features/planner/normalize-planner-events";
 import { normalizeStudents } from "@/features/students/normalize-students";
 import { toDateKey } from "@/lib/planner-dates";
+import { normalizeGoals, normalizeSleepRecord, normalizeTransactions } from "@/features/app/normalize-app-data";
 import type { AppSection, Emi, EventKind, FinanceFilter, Goal, GoalPeriod, LessonStatus, PlannerEvent, Project, Student, Transaction, TransactionType, WeeklyClass } from "@/types/app";
 
 function createId() {
@@ -24,13 +25,13 @@ export function useAppState() {
   const [toast, setToast] = useState("");
   const [darkMode, setDarkMode] = useState(true);
 
-  const [goals, setGoals] = usePersistentState("daylight-goals", initialGoals);
+  const [goals, setGoals] = usePersistentState("daylight-goals", initialGoals, normalizeGoals);
   const [projects, setProjects] = usePersistentState<Project[]>("daylight-projects", []);
   const [students, setStudents] = usePersistentState("daylight-students", initialStudents, normalizeStudents);
-  const [transactions, setTransactions] = usePersistentState("daylight-finances", initialTransactions);
+  const [transactions, setTransactions] = usePersistentState("daylight-finances", initialTransactions, normalizeTransactions);
   const [emis, setEmis] = usePersistentState<Emi[]>("daylight-emis", [], normalizeEmis);
   const [storedPlannerEvents, setPlannerEvents] = usePersistentState("daylight-events", initialPlannerEvents, normalizePlannerEvents);
-  const [sleepRecord, setSleepRecord] = usePersistentState("daylight-sleep", initialSleepRecord);
+  const [sleepRecord, setSleepRecord] = usePersistentState("daylight-sleep", initialSleepRecord, normalizeSleepRecord);
 
   const [showStudentForm, setShowStudentForm] = useState(false);
   const [studentName, setStudentName] = useState("");

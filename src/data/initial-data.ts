@@ -1,6 +1,6 @@
 import type { Goal, PlannerEvent, SleepRecord, Student, Transaction } from "@/types/app";
 
-// Start real accounts with clean records instead of fictional demo data.
+// First-run records start empty.
 export const initialGoals: Goal[] = [];
 export const initialStudents: Student[] = [];
 export const initialTransactions: Transaction[] = [];

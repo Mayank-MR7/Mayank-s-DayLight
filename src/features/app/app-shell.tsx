@@ -30,6 +30,7 @@ function AuthenticatedAppShell() {
       <AppSidebar
         activeSection={app.section}
         studentCount={app.students.length}
+        userEmail={auth.user?.email ?? ""}
         onNavigate={app.setSection}
         onTakeMoment={() => app.flash("Take a slow breath. You’re doing well.")}
       />

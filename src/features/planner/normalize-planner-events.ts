@@ -11,6 +11,7 @@ export function normalizePlannerEvents(value: unknown): PlannerEvent[] {
     if (typeof entry !== "object" || entry === null) return [];
 
     const candidate = entry as Partial<PlannerEvent>;
+    if (/^(event-(?:[1-9]|1[0-2])|sample-log-[1-4])$/.test(String(candidate.id ?? ""))) return [];
     if (
       typeof candidate.title !== "string" ||
       typeof candidate.day !== "number" || candidate.day < 0 || candidate.day > 6 ||

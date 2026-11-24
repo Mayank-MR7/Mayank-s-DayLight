@@ -9,6 +9,7 @@ export function normalizeStudents(value: unknown): Student[] {
   return value.flatMap((entry): Student[] => {
     if (typeof entry !== "object" || entry === null) return [];
     const candidate = entry as Partial<Student>;
+    if (["student-ananya", "student-ishaan", "student-mira", "sample-student"].includes(String(candidate.id ?? ""))) return [];
     if (typeof candidate.name !== "string" || !candidate.name.trim()) return [];
 
     const starterStudent = initialStudents.find(student => student.name === candidate.name);

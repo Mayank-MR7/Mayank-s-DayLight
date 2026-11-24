@@ -3,20 +3,7 @@
 import { useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import type { AppState } from "@/features/app/use-app-state";
-import type { PlannerEvent, Student } from "@/types/app";
 import { formatClock } from "@/lib/time-format";
-
-const sampleStudent: Student = {
-  id: "sample-student", name: "Aarav Patel", instrument: "Piano · Beginner", address: "", initials: "AP",
-  color: "mint", next: "Schedule a class", fee: 6000, cycleCount: 8, paid: false, initialClasses: 1,
-  weeklyClasses: [{ id: "sample-mon", day: 0, start: 16, duration: 1 }, { id: "sample-thu", day: 3, start: 17, duration: 1 }],
-};
-const sampleClassLogs: PlannerEvent[] = [
-  { id: "sample-log-1", day: 0, date: "2026-11-09", start: 16, duration: 1, title: "Piano class", studentId: sampleStudent.id, status: "completed", kind: "lesson" },
-  { id: "sample-log-2", day: 3, date: "2026-11-12", start: 17, duration: 1, title: "Piano class", studentId: sampleStudent.id, status: "completed", kind: "lesson" },
-  { id: "sample-log-3", day: 0, date: "2026-11-16", start: 16, duration: 1, title: "Piano class", studentId: sampleStudent.id, status: "completed", kind: "lesson" },
-  { id: "sample-log-4", day: 3, date: "2026-11-19", start: 17, duration: 1, title: "Piano class", studentId: sampleStudent.id, status: "completed", kind: "lesson" },
-];
 
 export function StudentsPage({ app }: { app: AppState }) {
   const { students, filteredStudents, plannerEvents, openStudentForm, editStudent, toggleStudentPaid, removeStudent, query } = app;
@@ -28,13 +15,11 @@ export function StudentsPage({ app }: { app: AppState }) {
   function getCompletedCount(studentId: string) {
     return completedLessons.filter(event => event.studentId === studentId).length;
   }
-  const isSamplePreview = selectedStudentId === sampleStudent.id;
-  const selectedStudent = isSamplePreview ? sampleStudent : students.find(student => (student.id ?? student.name) === selectedStudentId);
-  const selectedLogs = selectedStudent ? isSamplePreview ? [...sampleClassLogs].reverse() : completedLessons.filter(event => event.studentId === (selectedStudent.id ?? selectedStudent.name)) : [];
-  const previewLogs = selectedStudent && selectedLogs.length < 4
-    ? createPreviewLogs(selectedStudent, selectedLogs, 4 - selectedLogs.length)
+  const selectedStudent = students.find(student => (student.id ?? student.name) === selectedStudentId);
+  const selectedLogs = selectedStudent
+    ? completedLessons.filter(event => event.studentId === (selectedStudent.id ?? selectedStudent.name))
     : [];
-  const displayLogs = [...selectedLogs, ...previewLogs].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "") || b.start - a.start);
+  const displayLogs = selectedLogs;
 
   return (
     <>
@@ -50,7 +35,7 @@ export function StudentsPage({ app }: { app: AppState }) {
       <section className="panel full-list-panel">
         <div className="panel-heading">
           <div><div className="section-kicker">STUDENT ROSTER</div><h2>{students.length} students</h2></div>
-          <div className="roster-note-actions"><span className="roster-note">Tap a fee status to update payment</span><button className="student-edit-button" onClick={() => setSelectedStudentId(sampleStudent.id!)}>View sample log</button></div>
+          <div className="roster-note-actions"><span className="roster-note">Tap a fee status to update payment</span></div>
         </div>
         <div className="full-student-list">
           {filteredStudents.map(student => (
@@ -87,42 +72,19 @@ export function StudentsPage({ app }: { app: AppState }) {
       {selectedStudent && <div className="modal-backdrop student-history-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setSelectedStudentId(null); }}>
         <section className="modal-card student-history-modal" role="dialog" aria-modal="true" aria-labelledby="student-history-title">
           <button type="button" className="modal-close" onClick={() => setSelectedStudentId(null)} aria-label="Close class history"><Icon name="close"/></button>
-          <div className="section-kicker">{isSamplePreview ? "SAMPLE CLASS LOG · PREVIEW ONLY" : previewLogs.length ? "STUDENT CLASS LOG · SAMPLE ENTRIES MARKED" : "STUDENT CLASS LOG"}</div><h2 id="student-history-title">{selectedStudent.name}</h2>
+          <div className="section-kicker">STUDENT CLASS LOG</div><h2 id="student-history-title">{selectedStudent.name}</h2>
           <p>{selectedStudent.instrument} · {selectedStudent.weeklyClasses.length} classes per week</p>
-          <div className="class-count-editor"><span><b>Classes taken so far</b><small>{previewLogs.length ? "Includes sample preview entries shown below." : "Based on the saved starting count and completed class log."}</small></span><strong>{(selectedStudent.initialClasses ?? 0) + selectedLogs.length + previewLogs.length}</strong></div>
+          <div className="class-count-editor"><span><b>Classes taken so far</b><small>Based on the saved starting count and completed class log.</small></span><strong>{(selectedStudent.initialClasses ?? 0) + selectedLogs.length}</strong></div>
           <div className="student-history-list" aria-label="Completed class sessions">
             {displayLogs.map(event => <article className="completed-session-row" key={event.id ?? `${event.date}-${event.start}-${event.title}`}>
               <span className="student-avatar music-session-avatar">{selectedStudent.initials}</span>
-              <span className="transaction-description"><b>{selectedStudent.name}</b><small>{event.title}{event.details ? ` · ${event.details}` : ""}{event.id?.startsWith("preview-") ? " · Sample preview" : ""}</small></span>
+              <span className="transaction-description"><b>{selectedStudent.name}</b><small>{event.title}{event.details ? ` · ${event.details}` : ""}</small></span>
               <span className="session-date">{new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric", year: "numeric" }).format(new Date(`${event.date}T12:00:00`))} · {formatClock(event.start)}</span>
             </article>)}
-            {selectedLogs.length === 0 && displayLogs.length === 0 && <div className="empty-transactions">No completed class logs yet.</div>}
+            {displayLogs.length === 0 && <div className="empty-transactions">No completed class logs yet.</div>}
           </div>
         </section>
       </div>}
     </>
   );
-}
-
-function createPreviewLogs(student: Student, existingLogs: PlannerEvent[], amount: number): PlannerEvent[] {
-  const schedule = student.weeklyClasses.length ? student.weeklyClasses : [{ id: "preview-default", day: 0, start: 16, duration: 1 }];
-  const recorded = new Set(existingLogs.map(event => `${event.date}-${event.start}`));
-  const previews: PlannerEvent[] = [];
-  const now = new Date();
-  for (let offset = 1; offset <= 120 && previews.length < amount; offset += 1) {
-    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset);
-    const day = (date.getDay() + 6) % 7;
-    const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-    for (const weeklyClass of schedule.filter(item => item.day === day)) {
-      if (previews.length >= amount) break;
-      if (recorded.has(`${dateKey}-${weeklyClass.start}`)) continue;
-      previews.push({
-        id: `preview-${student.id ?? student.name}-${dateKey}-${weeklyClass.id}`,
-        date: dateKey, day, start: weeklyClass.start, duration: weeklyClass.duration,
-        title: `${student.instrument.split(" · ")[0]} class`, studentId: student.id ?? student.name,
-        status: "completed", kind: "lesson",
-      });
-    }
-  }
-  return previews;
 }

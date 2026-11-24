@@ -37,8 +37,11 @@ export function FinancesPage({ app }: { app: AppState }) {
   const emiTotal = emiDueThisPeriod.reduce((sum, item) => sum + item.emi.amount, 0);
   const expenseTotal = expenseEntries + emiTotal;
 
-  const emergencySaving = transactions.filter(item => item.type === "saving" && item.category === "Emergency fund").reduce((sum, item) => sum + item.amount, 0);
-  const personalSaving = transactions.filter(item => item.type === "saving" && item.category === "Personal goal").reduce((sum, item) => sum + item.amount, 0);
+  const savingsByCategory = transactions.filter(item => item.type === "saving").reduce<Record<string, number>>((groups, item) => {
+    groups[item.category] = (groups[item.category] ?? 0) + item.amount;
+    return groups;
+  }, {});
+  const savingsCategories = Object.entries(savingsByCategory).sort((a, b) => b[1] - a[1]);
   const expensesByCategory = periodTransactions.filter(item => item.type === "expense").reduce<Record<string, number>>((groups, item) => {
     groups[item.category] = (groups[item.category] ?? 0) + item.amount;
     return groups;
@@ -89,18 +92,14 @@ export function FinancesPage({ app }: { app: AppState }) {
         <article className="finance-stat income-stat">
           <div className="finance-stat-head"><span className="stat-icon mint"><Icon name="arrow" size={17}/></span><span className="finance-period">THIS {period.toUpperCase()}</span></div>
           <div className="finance-label">TOTAL EARNINGS</div><b>{formatCurrency(incomeTotal)}</b><small>{period === "week" ? "Money earned this week" : "Money earned this month"}</small>
-          <div className="finance-mini-bars income-bars">{Array.from({ length: 12 }, (_, index) => <i key={index}/>)}</div>
         </article>
         <article className="finance-stat expense-stat">
           <div className="finance-stat-head"><span className="stat-icon peach"><Icon name="arrow" size={17}/></span><span className="finance-period">THIS {period.toUpperCase()}</span></div>
           <div className="finance-label">TOTAL EXPENSES</div><b>{formatCurrency(expenseTotal)}</b><small>Daily expenses + scheduled EMIs</small>
-          <div className="finance-mini-bars expense-bars">{Array.from({ length: 12 }, (_, index) => <i key={index}/>)}</div>
         </article>
         <article className="finance-stat saving-stat">
           <div className="finance-stat-head"><span className="stat-icon lilac"><Icon name="target" size={17}/></span><span className="finance-period">THIS {period.toUpperCase()}</span></div>
-          <div className="finance-label">SAVED SO FAR</div><b>{formatCurrency(savingsTotal)}</b><small>For this {period}</small>
-          <div className="savings-progress"><span style={{ width: `${Math.min(100, savingsTotal / 15000 * 100)}%` }}/></div>
-          <div className="savings-caption">{formatCurrency(savingsTotal)} <span>of ₹15,000 monthly target</span></div>
+          <div className="finance-label">SAVED SO FAR</div><b>{formatCurrency(savingsTotal)}</b><small>Recorded this {period}</small>
         </article>
         <article className="finance-stat balance-stat">
           <div className="finance-stat-head"><span className="stat-icon sand"><Icon name="spark" size={17}/></span><span className="finance-period">THIS {period.toUpperCase()}</span></div>
@@ -194,9 +193,9 @@ export function FinancesPage({ app }: { app: AppState }) {
 
         <div className="finance-side">
           <section className="panel savings-panel">
-            <div className="panel-heading"><div><div className="section-kicker">FUTURE YOU SAYS THANKS</div><h2>Savings goals</h2></div><button className="icon-button" onClick={() => openTransactionForm("saving")} aria-label="Add to savings"><Icon name="plus" size={16}/></button></div>
-            <SavingsGoal title="Rainy day fund" category="Emergency fund" amount={emergencySaving} target={20000} tint="lavender" icon="✦"/>
-            <SavingsGoal title="New keyboard" category="Personal goal" amount={personalSaving} target={30000} tint="mint" icon="♫"/>
+            <div className="panel-heading"><div><div className="section-kicker">SAVINGS ACTIVITY</div><h2>Savings by category</h2></div><button className="icon-button" onClick={() => openTransactionForm("saving")} aria-label="Add a saving"><Icon name="plus" size={16}/></button></div>
+            {savingsCategories.map(([category, amount], index) => <div className="spend-category" key={category}><span className={`spend-dot ${["food", "travel", "other"][index % 3]}`}/><span>{category}</span><b>{formatCurrency(amount)}</b></div>)}
+            {savingsCategories.length === 0 && <div className="empty-transactions">Your savings entries will appear here.</div>}
             <button className="add-goal-link" onClick={() => openTransactionForm("saving")}><Icon name="plus" size={15}/> Add to savings</button>
           </section>
           <section className="panel spending-panel">
@@ -222,16 +221,6 @@ function IncomeForecast({ label, forecast }: { label: string; forecast: ReturnTy
       <div className="forecast-money-row"><span>Scheduled value</span><b>{formatCurrency(forecast.scheduledValue)}</b></div>
       <div className="forecast-money-row missed-forecast"><span>Missed value</span><b>−{formatCurrency(forecast.missedValue)}</b></div>
       <div className="forecast-money-row forecast-total"><span>Projected class income</span><b>{formatCurrency(forecast.projectedValue)}</b></div>
-    </article>
-  );
-}
-
-function SavingsGoal({ title, category, amount, target, tint, icon }: { title: string; category: string; amount: number; target: number; tint: "lavender" | "mint"; icon: string }) {
-  return (
-    <article className="saving-goal">
-      <div className="saving-goal-top"><span className={`goal-icon ${tint}`}>{icon}</span><span className="saving-goal-name"><b>{title}</b><small>{category}</small></span><b className="saving-amount">{formatCurrency(amount)}</b></div>
-      <div className="goal-bar"><span className={tint} style={{ width: `${Math.min(100, amount / target * 100)}%` }}/></div>
-      <div className="saving-goal-foot"><span>Goal {formatCurrency(target)}</span><span>{amount >= target ? "Goal reached" : "Keep going"}</span></div>
     </article>
   );
 }

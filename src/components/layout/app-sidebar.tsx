@@ -6,6 +6,7 @@ import type { AppSection, IconName } from "@/types/app";
 interface AppSidebarProps {
   activeSection: AppSection;
   studentCount: number;
+  userEmail: string;
   onNavigate: (section: AppSection) => void;
   onTakeMoment: () => void;
 }
@@ -20,7 +21,8 @@ const navigationGroups: { label: string; items: { label: AppSection; icon: IconN
   ] },
 ];
 
-export function AppSidebar({ activeSection, studentCount, onNavigate, onTakeMoment }: AppSidebarProps) {
+export function AppSidebar({ activeSection, studentCount, userEmail, onNavigate, onTakeMoment }: AppSidebarProps) {
+  const userInitial = userEmail.trim().slice(0, 1).toUpperCase() || "U";
   return (
     <aside className="sidebar">
       <a className="brand" href="#home">
@@ -29,8 +31,8 @@ export function AppSidebar({ activeSection, studentCount, onNavigate, onTakeMome
       </a>
 
       <div className="profile-switch">
-        <div className="profile-avatar">M</div>
-        <div className="profile-copy"><b>My workspace</b><small>Personal space</small></div>
+        <div className="profile-avatar">{userInitial}</div>
+        <div className="profile-copy"><b>My workspace</b><small title={userEmail}>{userEmail}</small></div>
         <span className="switch-dots"><Icon name="more" size={17}/></span>
       </div>
 
@@ -61,7 +63,7 @@ export function AppSidebar({ activeSection, studentCount, onNavigate, onTakeMome
           <button onClick={onTakeMoment}>A moment for me <Icon name="arrow" size={14}/></button>
         </div>
         <div className="side-footer">
-          <span className="mini-avatar">M</span>
+          <span className="mini-avatar">{userInitial}</span>
           <span><b>Made for your rhythm</b><small>Version 0.1 · Just for you</small></span>
         </div>
       </div>

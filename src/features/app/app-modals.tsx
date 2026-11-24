@@ -24,7 +24,7 @@ export function AppModals({ app }: { app: AppState }) {
         <form className="modal-card student-modal-card" onSubmit={addStudent}>
           <button type="button" className="modal-close" onClick={resetStudentForm}><Icon name="close"/></button>
           <div className="modal-icon music"><Icon name="music" size={20}/></div><div className="section-kicker">GROW YOUR STUDIO</div><h2>{editingStudentId ? "Update student" : "Add a student"}</h2><p>Set their cycle fee and weekly lesson times.</p>
-          <label>Student name<input autoFocus required value={studentName} onChange={event => setStudentName(event.target.value)} placeholder="e.g. Aarav Patel"/></label>
+          <label>Student name<input autoFocus required value={studentName} onChange={event => setStudentName(event.target.value)} placeholder="Student name"/></label>
           <label>Instrument<input required value={studentInstrument} onChange={event => setStudentInstrument(event.target.value)} placeholder="e.g. Piano"/></label>
           <label>Address<textarea rows={2} required value={studentAddress} onChange={event => setStudentAddress(event.target.value)} placeholder="Student address"/></label>
           <div className="modal-inline-fields">
